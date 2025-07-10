@@ -1,39 +1,62 @@
-import requests
-from config import FOOTBALL_API_KEY, TENNIS_API_KEY
+import logging
+import aiohttp
+from datetime import datetime, timedelta
 
-class DataHandler:
-    def __init__(self):
-        self.football_api_key = FOOTBALL_API_KEY
-        self.tennis_api_key = TENNIS_API_KEY
+API_FOOTBALL_KEY = "6a166f5705742c52edbcc1c4f1115d5e"
+HEADERS = {"X-RapidAPI-Key": API_FOOTBALL_KEY}
 
-    def get_live_football(self):
-        url = "https://v3.football.api-sports.io/fixtures?live=all"
-        headers = {"x-apisports-key": self.football_api_key}
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        return None
+# Logging
+logging.basicConfig(level=logging.INFO)
 
-    def get_prematch_football(self):
-        url = "https://v3.football.api-sports.io/fixtures?next=10"
-        headers = {"x-apisports-key": self.football_api_key}
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        return None
+async def fetch_data(url, params=None):
+    async with aiohttp.ClientSession(headers=HEADERS) as session:
+        try:
+            async with session.get(url, params=params) as response:
+                logging.info(f"Requesting: {url} with params {params}")
+                data = await response.json()
+                logging.info(f"Response: {data}")
+                return data
+        except Exception as e:
+            logging.error(f"API error: {e}")
+            return None
 
-    def get_live_tennis(self):
-        url = "https://api.the-odds-api.com/v4/sports/tennis/events/?regions=eu&oddsFormat=decimal"
-        headers = {"x-apisports-key": self.tennis_api_key}
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        return None
+async def get_live_matches(sport):
+    if sport == "football":
+        url = "https://v3.football.api-sports.io/fixtures"
+        params = {"live": "all"}
+    elif sport == "tennis":
+        url = "https://v1.tennis.api-sports.io/matches"
+        params = {"live": "all"}
+    else:
+        return []
 
-    def get_prematch_tennis(self):
-        url = "https://api.the-odds-api.com/v4/sports/tennis/events/?regions=eu&oddsFormat=decimal"
-        headers = {"x-apisports-key": self.tennis_api_key}
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        return None
+    data = await fetch_data(url, params)
+    if not data or "response" not in data:
+        logging.warning(f"No data or empty response for {sport}")
+        return []
+
+    return data["response"]
+
+async def get_upcoming_matches(sport):
+    today = datetime.utcnow().date()
+    tomorrow = today + timedelta(days=1)
+
+    if sport == "football":
+        url = "https://v3.football.api-sports.io/fixtures"
+        params = {
+            "date": today.strftime("%Y-%m-%d")
+        }
+    elif sport == "tennis":
+        url = "https://v1.tennis.api-sports.io/matches"
+        params = {
+            "date": today.strftime("%Y-%m-%d")
+        }
+    else:
+        return []
+
+    data = await fetch_data(url, params)
+    if not data or "response" not in data:
+        logging.warning(f"No upcoming data for {sport}")
+        return []
+
+    return data["response"]
